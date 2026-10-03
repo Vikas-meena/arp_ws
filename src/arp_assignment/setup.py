@@ -1,3 +1,5 @@
+from glob import glob
+
 from setuptools import find_packages, setup
 
 
@@ -27,6 +29,22 @@ setup(
             + package_name,
 
             ["package.xml"],
+        ),
+
+        (
+            "share/"
+            + package_name
+            + "/launch",
+
+            glob("launch/*.launch.py"),
+        ),
+
+        (
+            "share/"
+            + package_name
+            + "/rviz",
+
+            glob("rviz/*.rviz"),
         ),
     ],
 

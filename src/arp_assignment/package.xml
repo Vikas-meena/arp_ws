@@ -36,6 +36,14 @@
   <!-- RViz markers -->
   <depend>visualization_msgs</depend>
 
+  <!-- Robot frame TF -->
+  <depend>tf2_ros</depend>
+
+  <!-- Launch + RViz2 demo -->
+  <exec_depend>launch</exec_depend>
+  <exec_depend>launch_ros</exec_depend>
+  <exec_depend>rviz2</exec_depend>
+
   <export>
 
     <build_type>

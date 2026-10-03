@@ -1,13 +1,19 @@
+import signal
+
 import numpy as np
 
 import rclpy
 from rclpy.node import Node
+from rclpy.qos import QoSProfile, DurabilityPolicy
 
 from nav_msgs.msg import OccupancyGrid
 from nav_msgs.msg import Path
 
 from geometry_msgs.msg import PoseStamped
 from geometry_msgs.msg import Point
+from geometry_msgs.msg import TransformStamped
+
+from tf2_ros import TransformBroadcaster
 
 from std_msgs.msg import ColorRGBA
 
@@ -74,10 +80,17 @@ class BVINavigationNode(Node):
         # Publishers
         # =====================================================
 
+        # Transient local so RViz Map display (default durability)
+        # receives the map
+        map_qos = QoSProfile(
+            depth=1,
+            durability=DurabilityPolicy.TRANSIENT_LOCAL
+        )
+
         self.map_publisher = self.create_publisher(
             OccupancyGrid,
             "/map",
-            10
+            map_qos
         )
 
         self.path_publisher = self.create_publisher(
@@ -110,13 +123,29 @@ class BVINavigationNode(Node):
             10
         )
 
+        # Robot frame: map -> base_link
+        self.tf_broadcaster = TransformBroadcaster(self)
+
         # =====================================================
         # Timer
-        # Robot moves every 2 seconds
+        # Robot holds at start for start_delay seconds,
+        # then moves one cell every step_period seconds
         # =====================================================
 
+        self.start_delay = self.declare_parameter(
+            "start_delay",
+            5.0
+        ).value
+
+        step_period = self.declare_parameter(
+            "step_period",
+            2.0
+        ).value
+
+        self.start_time = self.get_clock().now()
+
         self.timer = self.create_timer(
-            2.0,
+            step_period,
             self.update
         )
 
@@ -143,6 +172,14 @@ class BVINavigationNode(Node):
         self.publish_start_goal()
 
         # Move robot along optimal path
+
+        elapsed = (
+            self.get_clock().now() - self.start_time
+        ).nanoseconds / 1e9
+
+        if elapsed < self.start_delay:
+
+            return
 
         if self.current_index < len(self.path) - 1:
 
@@ -270,6 +307,22 @@ class BVINavigationNode(Node):
 
         self.pose_publisher.publish(msg)
 
+        # Broadcast robot frame so RViz has map -> base_link TF
+
+        transform = TransformStamped()
+
+        transform.header = msg.header
+
+        transform.child_frame_id = "base_link"
+
+        transform.transform.translation.x = msg.pose.position.x
+
+        transform.transform.translation.y = msg.pose.position.y
+
+        transform.transform.rotation.w = 1.0
+
+        self.tf_broadcaster.sendTransform(transform)
+
     # =========================================================
     # Publish robot marker
     # =========================================================
@@ -374,7 +427,7 @@ class BVINavigationNode(Node):
 
         # Make heatmap slightly transparent
 
-        marker.color.a = 0.25
+        marker.color.a = 0.6
 
         for y in range(
             self.grid_map.height
@@ -450,7 +503,7 @@ class BVINavigationNode(Node):
                     1.0 - normalized
                 )
 
-                color.a = 0.25
+                color.a = 0.6
 
                 marker.colors.append(
                     color
@@ -593,9 +646,15 @@ def main(args=None):
 
     finally:
 
+        # ros2 launch forwards a second SIGINT; ignore it
+        # so cleanup is not interrupted
+        signal.signal(signal.SIGINT, signal.SIG_IGN)
+
         node.destroy_node()
 
-        rclpy.shutdown()
+        if rclpy.ok():
+
+            rclpy.shutdown()
 
 
 if __name__ == "__main__":

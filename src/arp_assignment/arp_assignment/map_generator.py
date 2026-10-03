@@ -78,6 +78,12 @@ class GridMap:
             self.grid[y, x] == 0
         )
 
+    def is_obstacle(self, cell):
+
+        x, y = cell
+
+        return self.grid[y, x] == 1
+
 
 if __name__ == "__main__":
 
